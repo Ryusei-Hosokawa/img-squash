@@ -21,19 +21,25 @@ bun install
 
 ```bash
 # ドライラン（ファイルは変更しない。容量の変化だけ表示する）
-bun src/main.ts <ディレクトリ>
+bun src/main.ts [ディレクトリ]
 
 # 適用
-bun src/main.ts <ディレクトリ> --apply
+bun src/main.ts [ディレクトリ] --apply
 
 # 特定のディレクトリを対象から外す（複数指定できる）
-bun src/main.ts <ディレクトリ> --apply --exclude <外すディレクトリ>
+bun src/main.ts [ディレクトリ] --apply --exclude <外すディレクトリ>
 ```
+
+ディレクトリを省略すると、**カレントディレクトリ配下**が対象になる。
+どのディレクトリが対象かは、実行の最初に `対象: <フルパス>` と表示する。
 
 dotfiles から導入している場合は、`isq` で実行できる。
 
 ```bash
-isq <ディレクトリ> [--apply] [--exclude <ディレクトリ>]...
+isq                      # カレントディレクトリ配下をドライラン
+isq --apply              # カレントディレクトリ配下に適用
+isq <ディレクトリ>       # 指定したディレクトリをドライラン
+isq [ディレクトリ] [--apply] [--exclude <ディレクトリ>]...
 ```
 
 ## Behavior

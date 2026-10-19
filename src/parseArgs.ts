@@ -8,8 +8,10 @@ export type Options = {
 
 const EXCLUDE_FLAG: string = '--exclude';
 const EXCLUDE_PREFIX: string = `${EXCLUDE_FLAG}=`;
+/** 対象ディレクトリを省略したときは、カレントディレクトリ配下を対象にする。 */
+const DEFAULT_ROOT: string = '.';
 
-/** 対象ディレクトリが無ければ null を返す。 */
+/** `--exclude` に値が無いなど、読み取れない引数のときは null を返す。 */
 export function parseArgs(argv: readonly string[]): Options | null {
     const excludes: string[] = [];
     const positionals: string[] = [];
@@ -34,10 +36,5 @@ export function parseArgs(argv: readonly string[]): Options | null {
         }
     }
 
-    const root: string | undefined = positionals[0];
-    if (root === undefined) {
-        return null;
-    }
-
-    return { root: resolve(root), apply, excludes };
+    return { root: resolve(positionals[0] ?? DEFAULT_ROOT), apply, excludes };
 }

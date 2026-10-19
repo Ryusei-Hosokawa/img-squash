@@ -114,7 +114,9 @@ function trashFile(path: string): void {
 export function main(): void {
     const options: Options | null = parseArgs(process.argv.slice(2));
     if (options === null) {
-        return fail('使い方: isq <ディレクトリ> [--apply] [--exclude <ディレクトリ>]...');
+        return fail(
+            '使い方: isq [ディレクトリ] [--apply] [--exclude <ディレクトリ>]...（ディレクトリを省略するとカレントディレクトリ）',
+        );
     }
     if (!existsSync(options.root) || !statSync(options.root).isDirectory()) {
         return fail(`ディレクトリが無い: ${options.root}`);
@@ -125,6 +127,8 @@ export function main(): void {
     if (options.apply && !commandExists('trash')) {
         return fail('trash が見つからない。元の PNG をゴミ箱に送れないため中止する。');
     }
+
+    console.log(`対象: ${options.root}`);
 
     const pngs: string[] = walkFiles(options.root, (path: string) => /\.png$/i.test(path), options.excludes).sort();
     if (pngs.length === 0) {
