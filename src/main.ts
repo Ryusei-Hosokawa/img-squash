@@ -55,6 +55,9 @@ const shouldColor = (): boolean => process.stdout.isTTY === true && process.env[
 /** 進捗を出すのは、標準エラー出力が端末に直接つながっているときだけ。 */
 const shouldShowProgress = (): boolean => process.stderr.isTTY === true;
 
+/** 進捗の色は、進捗を出す先（標準エラー出力）が端末のときだけ付くので、NO_COLOR が無ければ付ける。 */
+const shouldColorProgress = (): boolean => process.env['NO_COLOR'] === undefined;
+
 export async function main(): Promise<void> {
     const parsed: ParseResult = parseArgs(process.argv.slice(2));
     if (!parsed.ok) {
@@ -82,7 +85,7 @@ export async function main(): Promise<void> {
 
     const shortPath = (path: string): string => nfc(relative(options.root, path));
 
-    const progress: Progress = createProgress(shouldShowProgress(), pngs.length);
+    const progress: Progress = createProgress(shouldShowProgress(), pngs.length, createPainter(shouldColorProgress()));
     let result: { converted: Converted[]; skipped: Skipped[] };
     try {
         result = await convertAll(pngs, {

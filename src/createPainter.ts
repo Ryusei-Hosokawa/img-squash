@@ -1,8 +1,10 @@
 export type Painter = {
     bold: (text: string) => string;
+    dim: (text: string) => string;
     green: (text: string) => string;
     yellow: (text: string) => string;
     red: (text: string) => string;
+    cyan: (text: string) => string;
 };
 
 const RESET: string = '\u001B[0m';
@@ -16,8 +18,10 @@ const wrap =
 export function createPainter(enabled: boolean): Painter {
     return {
         bold: wrap('1', enabled),
+        dim: wrap('2', enabled),
         green: wrap('32', enabled),
         yellow: wrap('33', enabled),
         red: wrap('31', enabled),
+        cyan: wrap('36', enabled),
     };
 }
