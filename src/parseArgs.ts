@@ -4,6 +4,7 @@ export type Options = {
     root: string;
     apply: boolean;
     excludes: string[];
+    verbose: boolean;
 };
 
 const EXCLUDE_FLAG: string = '--exclude';
@@ -16,12 +17,15 @@ export function parseArgs(argv: readonly string[]): Options | null {
     const excludes: string[] = [];
     const positionals: string[] = [];
     let apply: boolean = false;
+    let verbose: boolean = false;
 
     for (let i: number = 0; i < argv.length; i++) {
         const arg: string = argv[i] ?? '';
 
         if (arg === '--apply') {
             apply = true;
+        } else if (arg === '--verbose' || arg === '-v') {
+            verbose = true;
         } else if (arg === EXCLUDE_FLAG) {
             const value: string | undefined = argv[i + 1];
             if (value === undefined) {
@@ -31,10 +35,10 @@ export function parseArgs(argv: readonly string[]): Options | null {
             i++;
         } else if (arg.startsWith(EXCLUDE_PREFIX)) {
             excludes.push(resolve(arg.slice(EXCLUDE_PREFIX.length)));
-        } else if (!arg.startsWith('--')) {
+        } else if (!arg.startsWith('-')) {
             positionals.push(arg);
         }
     }
 
-    return { root: resolve(positionals[0] ?? DEFAULT_ROOT), apply, excludes };
+    return { root: resolve(positionals[0] ?? DEFAULT_ROOT), apply, excludes, verbose };
 }

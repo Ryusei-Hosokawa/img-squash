@@ -1,8 +1,10 @@
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { convertToWebp } from './convertToWebp';
+import { createPainter, type Painter } from './createPainter';
 import { findMarkdownRoot } from './findMarkdownRoot';
+import { formatApplied, formatReport } from './formatReport';
 import { formatBytes } from './formatBytes';
 import { nfc } from './nfc';
 import { parseArgs, type Options } from './parseArgs';
@@ -11,10 +13,9 @@ import { walkFiles } from './walkFiles';
 
 type Converted = { png: string; webp: string; before: number; after: number };
 type Skipped = { png: string; reason: string };
-type MarkdownRewrite = { md: string; text: string };
+type MarkdownRewrite = { md: string; text: string; count: number };
 
 const EXIT_USAGE: number = 2;
-const PERCENT: number = 100;
 
 const toWebpPath = (png: string): string => png.replace(/\.png$/i, '.webp');
 
@@ -51,7 +52,7 @@ function convertAll(pngs: readonly string[], apply: boolean): { converted: Conve
             const before: number = statSync(png).size;
             const after: number = statSync(tmp).size;
             if (after >= before) {
-                skipped.push({ png, reason: `WebP のほうが大きい（${formatBytes(before)} → ${formatBytes(after)}）` });
+                skipped.push({ png, reason: `WebP のほうが大きい(${formatBytes(before)} → ${formatBytes(after)})` });
                 return;
             }
 
@@ -75,47 +76,31 @@ function collectRewrites(markdownRoot: string, converted: readonly Converted[]):
     for (const md of walkFiles(markdownRoot, (path: string) => path.endsWith('.md'), [])) {
         const result = rewriteMarkdownLinks(readFileSync(md, 'utf-8'), md, convertedPngs);
         if (result.count > 0) {
-            rewrites.push({ md, text: result.text });
+            rewrites.push({ md, text: result.text, count: result.count });
         }
     }
 
     return rewrites;
 }
 
-function printSummary(
-    options: Options,
-    pngCount: number,
-    converted: Converted[],
-    skipped: Skipped[],
-    rewriteCount: number,
-): void {
-    console.log(`PNG: ${pngCount}  変換: ${converted.length}  残す: ${skipped.length}  書き換える md: ${rewriteCount}`);
-
-    if (converted.length > 0) {
-        const before: number = converted.reduce((sum: number, c: Converted) => sum + c.before, 0);
-        const after: number = converted.reduce((sum: number, c: Converted) => sum + c.after, 0);
-        const saved: number = before - after;
-        const ratio: string = ((saved / before) * PERCENT).toFixed(1);
-        console.log(`容量: ${formatBytes(before)} → ${formatBytes(after)}（${formatBytes(saved)} 減、${ratio}%）`);
-    }
-
-    for (const skip of skipped) {
-        console.log(`  残す: ${skip.png.slice(options.root.length + 1)} — ${skip.reason}`);
-    }
-}
-
-function trashFile(path: string): void {
+/** 元の PNG をゴミ箱に送る。送れなかったら理由を標準エラー出力に出して false を返す。 */
+function trashFile(path: string): boolean {
     const result = Bun.spawnSync(['trash', path]);
     if (result.exitCode !== 0) {
         console.error(`ゴミ箱に送れなかった: ${path}\n${result.stderr.toString()}`);
     }
+
+    return result.exitCode === 0;
 }
+
+/** 色を付けるのは、端末に直接表示していて、NO_COLOR が設定されていないときだけ。 */
+const shouldColor = (): boolean => process.stdout.isTTY === true && process.env['NO_COLOR'] === undefined;
 
 export function main(): void {
     const options: Options | null = parseArgs(process.argv.slice(2));
     if (options === null) {
         return fail(
-            '使い方: isq [ディレクトリ] [--apply] [--exclude <ディレクトリ>]...（ディレクトリを省略するとカレントディレクトリ）',
+            '使い方: isq [ディレクトリ] [--apply] [--verbose] [--exclude <ディレクトリ>]...（ディレクトリを省略するとカレントディレクトリ）',
         );
     }
     if (!existsSync(options.root) || !statSync(options.root).isDirectory()) {
@@ -132,26 +117,47 @@ export function main(): void {
 
     const pngs: string[] = walkFiles(options.root, (path: string) => /\.png$/i.test(path), options.excludes).sort();
     if (pngs.length === 0) {
-        console.log('PNG が無い。何もしない。');
+        console.log('PNG が見つかりませんでした');
         return;
     }
 
     const { converted, skipped } = convertAll(pngs, options.apply);
     const rewrites: MarkdownRewrite[] = collectRewrites(findMarkdownRoot(options.root), converted);
-    printSummary(options, pngs.length, converted, skipped, rewrites.length);
 
-    if (!options.apply) {
-        console.log('ドライラン。変更するには --apply を付ける。');
+    const shortPath = (path: string): string => nfc(relative(options.root, path));
+    const paint: Painter = createPainter(shouldColor());
+    const report: string[] = formatReport(
+        {
+            apply: options.apply,
+            verbose: options.verbose,
+            totalPngs: pngs.length,
+            converted: converted.map((c: Converted) => ({ path: shortPath(c.png), before: c.before, after: c.after })),
+            skipped: skipped.map((s: Skipped) => ({ path: shortPath(s.png), reason: s.reason })),
+            rewrites: rewrites.map((r: MarkdownRewrite) => ({ path: shortPath(r.md), count: r.count })),
+        },
+        paint,
+    );
+    console.log(`${report.join('\n')}`);
+
+    if (!options.apply || converted.length === 0) {
         return;
     }
 
     for (const rewrite of rewrites) {
         writeFileSync(rewrite.md, rewrite.text);
     }
-    for (const c of converted) {
-        trashFile(c.png);
-    }
-    console.log('置き換えた。md のリンク切れが無いか確認すること。');
+    const trashed: number = converted.filter((c: Converted) => trashFile(c.png)).length;
+    console.log(
+        formatApplied(
+            {
+                created: converted.length,
+                rewrittenMarkdown: rewrites.length,
+                trashed,
+                trashFailed: converted.length - trashed,
+            },
+            paint,
+        ).join('\n'),
+    );
 }
 
 main();
