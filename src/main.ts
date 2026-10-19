@@ -5,6 +5,7 @@ import { createPainter, type Painter } from './createPainter';
 import { createProgress, type Progress } from './createProgress';
 import { findMarkdownRoot } from './findMarkdownRoot';
 import { formatApplied, formatReport } from './formatReport';
+import { formatUnreadable } from './formatUnreadable';
 import { nfc } from './nfc';
 import { parseArgs, type Options, type ParseResult } from './parseArgs';
 import { rewriteMarkdownLinks } from './rewriteMarkdownLinks';
@@ -77,13 +78,32 @@ export async function main(): Promise<void> {
 
     console.log(`対象: ${options.root}`);
 
-    const pngs: string[] = walkFiles(options.root, (path: string) => /\.png$/i.test(path), options.excludes).sort();
+    const paint: Painter = createPainter(shouldColor());
+    const shortPath = (path: string): string => nfc(relative(options.root, path));
+    const unreadable: string[] = [];
+
+    const pngs: string[] = walkFiles(
+        options.root,
+        (path: string) => /\.png$/i.test(path),
+        options.excludes,
+        unreadable,
+    ).sort();
+    /** 読めずに飛ばしたディレクトリの案内。対象ディレクトリ自体のときは '.' と表示する。 */
+    const printUnreadable = (): void => {
+        const lines: string[] = formatUnreadable(
+            unreadable.map((path: string): string => (shortPath(path) === '' ? '.' : shortPath(path))),
+            options.verbose,
+            paint,
+        );
+        if (lines.length > 0) {
+            console.log(lines.join('\n'));
+        }
+    };
     if (pngs.length === 0) {
         console.log('PNG が見つかりませんでした');
+        printUnreadable();
         return;
     }
-
-    const shortPath = (path: string): string => nfc(relative(options.root, path));
 
     const progress: Progress = createProgress(shouldShowProgress(), pngs.length, createPainter(shouldColorProgress()));
     let result: { converted: Converted[]; skipped: Skipped[] };
@@ -102,7 +122,6 @@ export async function main(): Promise<void> {
 
     const rewrites: MarkdownRewrite[] = collectRewrites(findMarkdownRoot(options.root), converted);
 
-    const paint: Painter = createPainter(shouldColor());
     const report: string[] = formatReport(
         {
             apply: options.apply,
@@ -115,6 +134,7 @@ export async function main(): Promise<void> {
         paint,
     );
     console.log(report.join('\n'));
+    printUnreadable();
 
     if (!options.apply || converted.length === 0) {
         return;

@@ -20,8 +20,8 @@ const JOBS_FLAGS: readonly string[] = ['--jobs', '-j'];
 
 /** 対象ディレクトリを省略したときは、カレントディレクトリ配下を対象にする。 */
 const DEFAULT_ROOT: string = '.';
-/** 既定の圧縮レベル。9 は最も小さいが、6 の十数倍遅く、容量の差は1割弱。 */
-const DEFAULT_LEVEL: number = 6;
+/** 既定の圧縮レベル。7 は 6 より約2%小さく、時間はほぼ同じ。9 は最も小さいが約15倍遅く、7 との容量の差は約7%。 */
+const DEFAULT_LEVEL: number = 7;
 const MIN_LEVEL: number = 0;
 const MAX_LEVEL: number = 9;
 const MAX_DEFAULT_JOBS: number = 8;
